@@ -1,0 +1,98 @@
+1. Data Acquisition and Preparation
+I started by gettingthe DBLP and ACM datasets, which were just big text files full of academic papers.
+My job was to pull out specific pieces of info from each paper: things like the paper's ID, its title,
+Author, where it was published, and when it came out. I was especially interested in papers from the
+years 1995 to 2004 that were published in two big conferences, VLDB and SIGMOD. To pick out
+these papers, I wrote some code that looked through each line of the text files, finding the bits I
+needed by looking for certain markers like "#*" for the title and "#@" for the authors. After that, I made
+sure to only keep the papers that were published in the right years and in the right places, checking
+the venue names without worrying about whether they were uppercase or lowercase. Finally, I put all
+this info into two CSV files, one for DBLP called DBLP 1995-2004.csv and one for ACM called ACM
+1995-2004.csv. Each file starts with a header row listing the columns: title, authors, year, venue, and
+id. For example, one entry might have the paper's title, a list of authors in brackets, the publication
+year, the full name of the conference where it was presented, and a unique ID for the paper.
+2. Entity Resolution Pipeline
+In the following task, I had to create an Entity Resolution (ER) Pipeline aimed at identifying and
+merging duplicate records across the DBLP and ACM datasets. The first step of this pipeline involves
+blocking, a technique used to efficiently organize data into manageable groups, which significantly
+reduces the computational complexity of matching records by focusing on likely matches.
+For blocking, I used three strategies: Sorted Neighborhood Method, Standard Blocking by Year, and
+N-gram Blocking:
+Sorted Neighborhood Method (SNM): This approach involves sorting the papers by title and then
+moving through the list with a sliding window, creating blocks of records within each window. This
+method helps to localize the comparison of records, focusing on those that are likely to be similar
+based on their proximity in the sorted list.
+Standard Blocking by Year: By grouping papers based on their publication year, this method
+segments the data into blocks where only papers published in the same year are compared against
+each other. It's based on the idea that duplicates are likely to have the same publication year.
+N-gram Blocking: This technique breaks down paper titles into n-grams, which are neighboring
+sequences of 'n' items from the title (e.g., characters or words), and then groups papers based on
+these n-grams.
+Each of these blocking strategies aims to reduce the complexity of the dataset, making the matching
+phase of the ER Pipeline more manageable and efficient by pre-filtering the records into likely
+matches before any detailed comparison is made.
+After the blocking phase in the Entity Resolution (ER) Pipeline, the matching stage comes into play,
+where I applied different similarity functions to compare records within blocks to find matches. These
+functions were:
+Levenshtein Similarity: This calculates how similar two strings are by measuring the minimum
+number of edits needed to change one string into the other. It's great for catching typos or small
+variations in paper titles.
+Phonetic Similarity: Using the Soundex algorithm, this function compares how similar two strings
+sound, helping to identify matches that might be spelled differently but sound alike. It's useful for
+names or terms that have multiple valid spellings.
+Jaccard Similarity: This measures the similarity between two sets, such as the words in two titles, by
+looking at the size of the intersection divided by the size of the union. It's particularly effective for
+comparing longer strings or lists of authors where order isn't crucial.
+
+Blocking Method       Similarity Function       Execution Time (s)  Precision  Recall   F-Measure
+-----------------------------------------------------------------------------------------------
+Baseline              -                         8.67                -         -        -
+SNM                   Phonetic Similarity       0.43                0.4667    0.0041   0.0081
+N-gram                Phonetic Similarity       43.01               0.1036    0.9621   0.1870
+Year                  Phonetic Similarity       2.59                0.4624    0.9458   0.6211
+SNM                   Levenshtein Similarity    0.16                1.0000    0.0041   0.0081
+N-gram                Levenshtein Similarity    17.41               1.0000    0.9977   0.9988
+Year                  Levenshtein Similarity    1.00                1.0000    0.9615   0.9804
+SNM                   Jaccard Similarity        0.43                0.0187    0.0041   0.0067
+N-gram                Jaccard Similarity        46.78               0.0226    0.9959   0.0441
+Year                  Jaccard Similarity        2.84                0.1339    0.9604   0.2350
+
+Looking at the table, it's shown that the Sorted Neighborhood Method (SNM) with Levenshtein and
+phonetic similarities achieved high precision but suffered from very low recall. This indicates that while
+the method was accurate in the matches it identified, it missed a significant number of potential
+matches. Attempts to improve recall by increasing the window size led to a slight improvement.
+However, this adjustment significantly increased the execution time, diminishing the method's
+efficiency. The N-gram blocking paired with Levenshtein similarity emerged as the most effective
+approach, yielding the best overall results. Despite its superior performance in matching accuracy,
+this method required a longer execution time than even the baseline measurement, highlighting a
+trade-off between accuracy and computational efficiency in the entity resolution process.
+After evaluating various blocking and matching methods, I selected the Year blocking method
+combined with Levenshtein similarity for entity resolution in the DBLP and ACM datasets. This
+approach yielded the highest precision and recall, indicating a superior ability to accurately identify
+duplicate records based on publication year and title similarity. To establish a point of reference for the
+effectiveness of the entity resolution process, I created a baseline by comparing every possible pair of
+records from the two datasets. Utilizing the Levenshtein similarity function, pairs exceeding a
+predefined similarity threshold were deemed matches. This process ensured a comprehensive
+baseline against which the chosen method's performance could be measured, demonstrating its
+effectiveness in the context of large-scale data integration and analysis.
+After identifying matches, in the clustering phase I grouped all matched entities, ensuring each cluster
+represented the same real-world entity. This process involved mapping paper titles to their records,
+then forming clusters based on matched pairs. A representative title was chosen for each cluster to
+resolve unmatched entities, updating the original datasets with these new records. The updated
+datasets were then written back to disk as new files called 'Updated_DBLP.csv' and
+'Updated_ACM.csv'.
+3. Data-Parallel Entity Resolution Pipeline
+For task 3, the goal was to adapt the existing entity resolution pipeline for a data-parallel computing
+environment to enhance scalability and performance. I chose Apache Spark for this purpose due to its
+robustness in handling large-scale data processing.
+The pipeline begins with initializing a Spark session and reading the datasets into DataFrames.
+Standard blocking is applied by year to organize the data into manageable groups. A user-defined
+function calculates Levenshtein similarity for title comparisons, filtering matches that exceed a
+similarity threshold. The process culminates in identifying unique matched pairs and writing them to a
+CSV file.
+In the clustering phase of the Apache Spark-based entity resolution pipeline, matched pairs were
+grouped into clusters to consolidate duplicate records. Unique cluster IDs were assigned to each
+matched pair, followed by aggregation to form clusters of titles from both DBLP and ACM datasets. A
+representative title was chosen for each cluster (here I chose to use the DBLP title as the
+representative title), facilitating the resolution of entities.
+
